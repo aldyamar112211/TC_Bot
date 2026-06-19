@@ -1,14 +1,14 @@
 import { AttachmentBuilder } from 'discord.js'
-import { generateWelcomeCard } from '../utils/generateCard.js'
+import { generateGoodbyeCard } from '../utils/generateCard.js'
 
 export default {
-  name: 'guildMemberAdd',
+  name: 'guildMemberRemove',
   async execute(member) {
     const channel = member.guild.channels.cache.get(process.env.WELCOME_CHANNEL_ID)
     if (!channel) return
 
-    const buffer = await generateWelcomeCard(member, member.guild.memberCount)
-    const attachment = new AttachmentBuilder(buffer, { name: 'welcome.png' })
+    const buffer = await generateGoodbyeCard(member)
+    const attachment = new AttachmentBuilder(buffer, { name: 'goodbye.png' })
 
     await channel.send({ files: [attachment] })
   },
