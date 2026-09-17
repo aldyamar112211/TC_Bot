@@ -36,4 +36,12 @@ for (const file of eventFiles) {
   }
 }
 
+client.on('error', (err) => {
+  console.error('[client error]', err)
+})
+
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err)
+})
+
 client.login(process.env.BOT_TOKEN)

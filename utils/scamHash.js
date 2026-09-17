@@ -1,6 +1,6 @@
 import sharp from 'sharp'
 import { createHash } from 'crypto'
-import { readdirSync, readFileSync } from 'fs'
+import { readdirSync, readFileSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -34,8 +34,12 @@ function hammingDistance(a, b) {
 let scamHashes = []
 
 export async function loadScamHashes() {
-  const files = readdirSync(SCAM_DIR).filter(f => /\.(jpe?g|png|webp)$/i.test(f))
   scamHashes = []
+  if (!existsSync(SCAM_DIR)) {
+    console.log(`[scamHash] Folder ${SCAM_DIR} tidak ada, deteksi gambar scam dilewati.`)
+    return
+  }
+  const files = readdirSync(SCAM_DIR).filter(f => /\.(jpe?g|png|webp)$/i.test(f))
   for (const file of files) {
     const buf = readFileSync(join(SCAM_DIR, file))
     const hash = await pHash(buf).catch(() => null)
