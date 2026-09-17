@@ -1,8 +1,9 @@
 import { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } from 'discord.js'
 import { generateWarningCard } from '../utils/generateCard.js'
 import { isScamImage } from '../utils/scamHash.js'
+import { resetTicketTimer } from '../commands/ticket.js'
 
-const LOG_CHANNEL_ID = '1409225485493207228'
+const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID
 const TICKET_CATEGORY_ID = process.env.TICKET_CATEGORY_ID
 
 const SCAM_PATTERNS = [
@@ -49,6 +50,15 @@ function isForwardWithMedia(message) {
 function isTicketChannel(message) {
   if (!TICKET_CATEGORY_ID) return false
   return message.channel.parentId === TICKET_CATEGORY_ID
+}
+
+// Deteksi invite Discord (discord.gg/xxx, discord.com/invite/xxx) di isi pesan.
+const DISCORD_INVITE_PATTERN = /(?:discord\.gg|discord\.com\/invite)\/([a-zA-Z0-9-]+)/i
+
+function extractDiscordInvite(content) {
+  if (!content) return null
+  const match = content.match(DISCORD_INVITE_PATTERN)
+  return match ? match[1] : null
 }
 
 function hasPaymentProof(message) {
@@ -98,6 +108,70 @@ async function handleScam(message, client, reason) {
   await logChannel.send({ embeds: [embed] })
 }
 
+// Repost pesan yang berisi invite server Discord lain pakai format card TC sendiri
+// (bukan embed default Discord yang polos), tetap tag pengirim asli biar jelas siapa
+// yang share. Isi pesan asli (di luar link invite) tetap ditampilkan biar konteksnya
+// gak ilang (misal caption "Tempat belajar bareng buat map Roblox" dst).
+async function handleDiscordInvite(message, client, inviteCode) {
+  const authorId = message.author.id
+  const authorTag = message.author.tag
+  const originalContent = message.content
+
+  let inviteInfo = null
+  try {
+    inviteInfo = await client.fetchInvite(inviteCode)
+  } catch {
+    // Invite invalid/expired — tetap repost tapi tanpa detail server
+  }
+
+  await message.delete().catch(() => {})
+
+  const embed = new EmbedBuilder()
+    .setColor(0xff1f3d)
+    .setAuthor({ name: `${message.author.displayName || authorTag} membagikan server`, iconURL: message.author.displayAvatarURL() })
+    .setFooter({ text: 'Terakhir Community' })
+    .setTimestamp()
+
+  // Bersihin isi pesan dari: URL invite itu sendiri, sisa "https://" yang nempel
+  // sebelum URL kalau dipisah baris (contoh format umum: "SERVER JOIN :\nhttps://discord.gg/xxx"),
+  // dan baris label semacam "SERVER JOIN :" yang jadi mubazir karena link-nya udah
+  // ada di tombol "Join Server" di bawah embed.
+  const textWithoutInviteUrl = originalContent
+    .replace(/https?:\/\/(?:www\.)?(?:discord\.gg|discord\.com\/invite)\/[a-zA-Z0-9-]+/gi, '')
+    .replace(/^.*server\s*join.*:?\s*$/gim, '')
+    .replace(/https?:\/\/\s*$/gim, '')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  if (textWithoutInviteUrl) {
+    embed.setDescription(textWithoutInviteUrl)
+  }
+
+  if (inviteInfo?.guild) {
+    embed.addFields(
+      { name: 'Server', value: inviteInfo.guild.name, inline: true },
+      { name: 'Member', value: `${inviteInfo.memberCount ?? '-'} (${inviteInfo.presenceCount ?? '-'} online)`, inline: true },
+    )
+    if (inviteInfo.guild.iconURL()) embed.setThumbnail(inviteInfo.guild.iconURL())
+  }
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setLabel('Join Server')
+      .setStyle(ButtonStyle.Link)
+      .setURL(`https://discord.gg/${inviteCode}`)
+      .setEmoji('🔗'),
+  )
+
+  await message.channel.send({
+    content: `Dibagikan oleh <@${authorId}>`,
+    embeds: [embed],
+    components: [row],
+  }).catch(() => {})
+}
+
 async function handlePaymentProof(message, client) {
   const attachment = [...message.attachments.values()][0]
 
@@ -138,6 +212,11 @@ export default {
     if (message.author.bot) return
     if (!message.guild) return
 
+    // Reset timer jika pesan dikirim di channel tiket
+    if (isTicketChannel(message)) {
+      resetTicketTimer(message.channel)
+    }
+
     // Cek bukti transfer di channel tiket
     if (isTicketChannel(message) && hasPaymentProof(message)) {
       await handlePaymentProof(message, client)
@@ -146,6 +225,14 @@ export default {
 
     if (isScamText(message.content)) {
       await handleScam(message, client, 'Teks mengandung pola scam')
+      return
+    }
+
+    // Repost invite server Discord pakai format card TC sendiri, biar tampilannya
+    // konsisten di semua channel (bukan cuma channel promosi tertentu).
+    const inviteCode = extractDiscordInvite(message.content)
+    if (inviteCode) {
+      await handleDiscordInvite(message, client, inviteCode)
       return
     }
 

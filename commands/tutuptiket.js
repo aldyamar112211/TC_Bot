@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js'
+import { sendTicketTranscript, cancelTicketTimer } from './ticket.js'
 
 export default {
   data: new SlashCommandBuilder()
@@ -11,7 +12,9 @@ export default {
       return
     }
 
+    cancelTicketTimer(interaction.channel.id)
     await interaction.reply({ content: 'Menutup tiket dalam 5 detik...' })
+    await sendTicketTranscript(interaction.channel, interaction.user)
     setTimeout(() => interaction.channel.delete().catch(() => {}), 5000)
   },
 }

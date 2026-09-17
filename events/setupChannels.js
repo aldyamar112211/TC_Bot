@@ -1,4 +1,5 @@
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js'
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js'
+import { JASA_FAQ } from '../config/jasa.js'
 
 async function sendIfNotExist(channel, embeds, components = []) {
   const messages = await channel.messages.fetch({ limit: 10 })
@@ -199,6 +200,78 @@ export async function setupChatNav(client) {
 
   const msg = await channel.send({ embeds: [embed] })
   await msg.pin().catch(() => {})
+}
+
+export async function setupJasaWebsite(client) {
+  const channel = await client.channels.fetch(process.env.JASA_CHANNEL_ID).catch(() => null)
+  if (!channel) return
+
+  const messages = await channel.messages.fetch({ limit: 10 })
+  const exists = messages.find(m => m.author.bot && m.embeds.length > 0)
+  if (exists) return
+
+  const embed = new EmbedBuilder()
+    .setColor(0xe74c3c)
+    .setTitle('🌐 Jasa Pembuatan Website — Terakhir Community')
+    .setDescription(
+      'Butuh website? TC bisa bikinin, dari landing page sederhana sampai web yang kompleks.\n\n' +
+      'Klik **Mulai Order Jasa** di bawah, isi formnya sebentar, dan admin bakal langsung handle proyekmu lewat tiket pribadi. Nggak ribet, tinggal ikutin tombolnya.',
+    )
+    .addFields(
+      { name: 'Yang bisa dibikin', value: '- Landing page / company profile\n- Toko online sederhana\n- Web app / dashboard\n- Custom sesuai kebutuhanmu' },
+      { name: 'Prosesnya', value: 'Isi form → admin review → ngobrol detail & harga → pengerjaan.' },
+    )
+    .setFooter({ text: 'Terakhir Community — Built To Be The Last' })
+
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('jasa_start').setLabel('Order Jasa Website').setStyle(ButtonStyle.Primary).setEmoji('🚀'),
+    new ButtonBuilder().setCustomId('jasa_tanya').setLabel('Tanya-tanya / Bantuan').setStyle(ButtonStyle.Secondary).setEmoji('💬'),
+    new ButtonBuilder().setCustomId('jasa_harga').setLabel('Info Harga & Paket').setStyle(ButtonStyle.Secondary).setEmoji('💰'),
+    new ButtonBuilder().setCustomId('jasa_carakerja').setLabel('Cara Kerja').setStyle(ButtonStyle.Secondary).setEmoji('🛠️'),
+  )
+
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setLabel('Lihat Contoh Demo').setStyle(ButtonStyle.Link).setURL('https://aldyamar112211.github.io/tc-jasa-demo/').setEmoji('🖥️'),
+    new ButtonBuilder().setLabel('Lihat Jasa di Web').setStyle(ButtonStyle.Link).setURL('https://terakhircommunity.com/jasa').setEmoji('🌐'),
+  )
+
+  await sendIfNotExist(channel, [embed], [row1, row2])
+}
+
+export async function setupJasaTanya(client) {
+  const channel = await client.channels.fetch(process.env.JASA_TANYA_CHANNEL_ID).catch(() => null)
+  if (!channel) return
+
+  const messages = await channel.messages.fetch({ limit: 10 })
+  const exists = messages.find(m => m.author.bot && m.embeds.length > 0)
+  if (exists) return
+
+  const embed = new EmbedBuilder()
+    .setColor(0x3498db)
+    .setTitle('💬 Tanya-tanya Seputar Jasa Website')
+    .setDescription(
+      'Penasaran soal jasa web TC tapi belum mau buka tiket? Santai!\n\n' +
+      'Pilih pertanyaan dari menu di bawah buat jawaban instan, atau kalau pertanyaanmu nggak ada di situ, klik **Tanya Langsung** buat ngobrol sama staff. Tanya-tanya gratis kok, nggak ada paksaan order.',
+    )
+    .setFooter({ text: 'Terakhir Community — Built To Be The Last' })
+
+  // Menu FAQ — tiap opsi = 1 pertanyaan
+  const faqSelect = new StringSelectMenuBuilder()
+    .setCustomId('jasa_faq')
+    .setPlaceholder('Pilih pertanyaan yang sering ditanyain...')
+    .addOptions(
+      JASA_FAQ.slice(0, 25).map((f, i) => ({
+        label: f.q.length > 100 ? f.q.slice(0, 97) + '...' : f.q,
+        value: String(i),
+      })),
+    )
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('jasa_harga').setLabel('Info Harga & Paket').setStyle(ButtonStyle.Secondary).setEmoji('💰'),
+    new ButtonBuilder().setCustomId('jasa_staff').setLabel('Tanya Langsung ke Staff').setStyle(ButtonStyle.Primary).setEmoji('📞'),
+  )
+
+  await sendIfNotExist(channel, [embed], [new ActionRowBuilder().addComponents(faqSelect), row])
 }
 
 export async function setupSuggestion(client) {

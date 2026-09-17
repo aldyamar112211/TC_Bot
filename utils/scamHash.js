@@ -34,12 +34,12 @@ function hammingDistance(a, b) {
 let scamHashes = []
 
 export async function loadScamHashes() {
-  scamHashes = []
   if (!existsSync(SCAM_DIR)) {
-    console.log(`[scamHash] Folder ${SCAM_DIR} tidak ada, deteksi gambar scam dilewati.`)
+    console.log('[scamHash] Folder assets/scam tidak ada, deteksi gambar scam dilewati.')
     return
   }
   const files = readdirSync(SCAM_DIR).filter(f => /\.(jpe?g|png|webp)$/i.test(f))
+  scamHashes = []
   for (const file of files) {
     const buf = readFileSync(join(SCAM_DIR, file))
     const hash = await pHash(buf).catch(() => null)

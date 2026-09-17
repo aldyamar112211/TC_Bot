@@ -1,6 +1,15 @@
 import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js'
-import { handleTicketButton, handleCloseTicket } from '../commands/ticket.js'
+import {
+  handleTicketButton, handleCloseTicket, handleJasaStart, handleJasaSubmit,
+  handleJasaHarga, handleJasaTanya, handleJasaPaket, handleJasaOk, handleJasaEli5,
+  handleJasaCalc, handleJasaCalcUpdate, handleJasaStaff, handleJasaFaq, handleJasaCaraKerja,
+} from '../commands/ticket.js'
 import { acceptOrder, rejectOrder } from '../utils/webApi.js'
+import { getPage, pagesByCat } from '../data/webInfo.js'
+import { ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js'
+
+const OWNER_ID = '732584744474247172'
+const KRITIK_CHANNEL_ID = '1409224631298166982'
 
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID
 const ROLE_MALE_NAME = 'Male'
@@ -150,9 +159,138 @@ async function handleOrderRejectPrompt(interaction, userId, channelId) {
   await interaction.showModal(modal)
 }
 
+async function handleFaqCaraBeli(interaction) {
+  const embed = new EmbedBuilder()
+    .setColor(0x3498db)
+    .setTitle('💳 Panduan Cara Beli & Konfirmasi')
+    .setDescription(
+      `Untuk melakukan pembelian produk **Terakhir Community**:\n\n` +
+      `1. Buka website resmi: **[terakhircommunity.com/store](https://terakhircommunity.com/store)** dan lakukan checkout.\n` +
+      `2. Lakukan transfer pembayaran sesuai metode berikut:\n` +
+      `   * **DANA:** \`089652254719\` (a.n. Aldy Amar Al Firdaus)\n` +
+      `   * **GoPay:** \`0895401381703\` (a.n. Aldy Amar Al Firdaus)\n` +
+      `   * **Trakteer (Luar Negeri):** [trakteer.id/aldy_amar_al_firdaus](https://trakteer.id/aldy_amar_al_firdaus)\n` +
+      `3. **Kirim foto/screenshot Bukti Transfer** kamu di channel tiket ini.\n` +
+      `4. Masukkan **Order ID** kamu di sini agar admin bisa mengonfirmasi pembelianmu dan mengirimkan link download secara otomatis.`
+    )
+    .setTimestamp()
+
+  await interaction.reply({ embeds: [embed] })
+}
+
+async function handleFaqDaftarHarga(interaction) {
+  const embed = new EmbedBuilder()
+    .setColor(0x2ecc71)
+    .setTitle('🛒 Daftar Harga Aset & Paket Hemat')
+    .setDescription(
+      `Berikut rincian harga produk yang tersedia di **Terakhir Community**:\n\n` +
+      `💰 **Produk Satuan:**\n` +
+      `* **Rasengan Ability System:** Rp 85.000\n` +
+      `* **Blackhole Coil System:** Rp 65.000\n` +
+      `* **Hammer Coil:** Rp 50.000\n` +
+      `* **SummitKit System V2.2:** *(Silakan cek harga & detail langsung di website)*\n\n` +
+      `🎁 **Paket Hemat (Bundle Deal):**\n` +
+      `* **Rasengan + Blackhole:** Rp 135.000 *(Hemat Rp 15.000)*\n` +
+      `* **Rasengan + Hammer:** Rp 120.000 *(Hemat Rp 15.000)*\n` +
+      `* **Blackhole + Hammer:** Rp 100.000 *(Hemat Rp 15.000)*\n` +
+      `* **Take All Deal (3 Coil):** Rp 185.000 *(Hemat Rp 15.000)*`
+    )
+    .setTimestamp()
+
+  await interaction.reply({ embeds: [embed] })
+}
+
+async function handleFaqSetupSummit(interaction) {
+  const embed = new EmbedBuilder()
+    .setColor(0xe67e22)
+    .setTitle('⚙️ Panduan Setup & Migrasi SummitKit')
+    .setDescription(
+      `Berikut langkah-langkah dasar setup **SummitKit System V2.2**:\n\n` +
+      `1. **Unduh Berkas:** Setelah pembelian dikonfirmasi, kamu akan menerima link download (Readme, MainContent, Dependencies Audio, Animasi, dan Video Tutorial).\n` +
+      `2. **Backup & Deploy:** Backup konfigurasi lamamu, lalu pasang V2.2 ke environment staging.\n` +
+      `3. **TC_Config:** Sesuaikan file \`TC_Config\` (terutama nama datastore dan pengaturan save debounce).\n` +
+      `4. **Tes & Uji:** Uji coba masuk/keluar game, penyimpanan data, leaderboard, dan lakukan stress test.\n\n` +
+      `*Jika kamu mengalami kendala atau menemukan error, silakan kirimkan screenshot output / error log Roblox Studio kamu di chat tiket ini agar kami bisa bantu analisis.*`
+    )
+    .setTimestamp()
+
+  await interaction.reply({ embeds: [embed] })
+}
+
+async function handleFaqHubungiAdmin(interaction) {
+  const embed = new EmbedBuilder()
+    .setColor(0xe74c3c)
+    .setTitle('📞 Hubungi Admin (Slow Response)')
+    .setDescription(
+      `Admin saat ini sedang offline atau sedang slow response.\n\n` +
+      `Jangan khawatir, kamu bisa meninggalkan pesan yang berisi:\n` +
+      `1. Pertanyaan atau detail kendala yang kamu alami secara jelas.\n` +
+      `2. Screenshot/bukti pendukung (jika ada).\n\n` +
+      `Admin akan langsung membaca dan menjawab pesanmu begitu online kembali!`
+    )
+    .setTimestamp()
+
+  await interaction.reply({ embeds: [embed] })
+}
+
+// Web Information: user pilih halaman dari dropdown, balas penjelasan (ephemeral).
+// Auto-dismiss: balasan bawa dropdown kategori yang sama, jadi kalau user pilih
+// halaman lain di situ, pesannya di-UPDATE (nimpa diri sendiri, ga numpuk).
+async function handleWebInfoSelect(interaction) {
+  const catId = interaction.customId.split(':')[1] // webinfo:<cat>
+  const page = getPage(interaction.values[0])
+  if (!page) {
+    return interaction.reply({ content: 'Halaman tidak ditemukan.', ephemeral: true })
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0xff1f3d)
+    .setTitle(`${page.emoji || '📄'} ${page.name}`)
+    .setDescription(page.fungsi)
+
+  if (page.cara?.length) embed.addFields({ name: '📝 Cara Pakai', value: page.cara.map((s, i) => `${i + 1}. ${s}`).join('\n').slice(0, 1024) })
+  if (page.syarat) embed.addFields({ name: '✅ Syarat', value: page.syarat.slice(0, 1024) })
+  if (page.disclaimer) embed.addFields({ name: '⚠️ Catatan Penting', value: page.disclaimer.slice(0, 1024) })
+  embed.setFooter({ text: 'Terakhir Community' })
+
+  // Dropdown kategori yang sama, ditaruh di balasan biar bisa ganti halaman tanpa numpuk
+  const pages = pagesByCat(catId)
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(`webinfo:${catId}`)
+    .setPlaceholder('Pilih halaman lain di kategori ini...')
+    .addOptions(pages.slice(0, 25).map(p => ({
+      label: p.name.slice(0, 100), value: p.id,
+      description: (p.fungsi || '').slice(0, 100), emoji: p.emoji || undefined,
+      default: p.id === page.id,
+    })))
+
+  const buttons = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setLabel('🌐 Buka Halaman').setStyle(ButtonStyle.Link).setURL(page.url || 'https://terakhircommunity.com'),
+    new ButtonBuilder().setLabel('💬 Hubungi Staff').setStyle(ButtonStyle.Link).setURL(`https://discord.com/users/${OWNER_ID}`),
+    new ButtonBuilder().setLabel('✍️ Kritik & Saran').setStyle(ButtonStyle.Link).setURL(`https://discord.com/channels/${interaction.guildId}/${KRITIK_CHANNEL_ID}`),
+  )
+
+  const payload = { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu), buttons], ephemeral: true }
+
+  // Deteksi asal interaksi:
+  // - Dari PANEL publik (pesan punya banyak komponen / nggak ada embed penjelasan) -> reply ephemeral baru
+  // - Dari BALASAN ephemeral kita (ada embed) -> update biar nimpa diri sendiri (anti numpuk)
+  const fromOwnReply = (interaction.message?.embeds?.length || 0) > 0 && (interaction.message?.components?.length || 0) === 2
+  if (fromOwnReply) {
+    await interaction.update({ embeds: payload.embeds, components: payload.components }).catch(() => {})
+  } else {
+    await interaction.reply(payload)
+  }
+}
+
 async function handleModalSubmit(interaction, client) {
   const id = interaction.customId
   const logChannel = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null)
+
+  if (id === 'modal_jasa') {
+    await handleJasaSubmit(interaction)
+    return
+  }
 
   if (id === 'modal_report_bug') {
     const location = interaction.fields.getTextInputValue('bug_location')
@@ -324,6 +462,13 @@ export default {
     if (interaction.isButton()) {
       const customId = interaction.customId
 
+      // Ambil GUI script (panel /guispoof)
+      if (customId === 'guispoof_get') {
+        const { handleGuiSpoofButton } = await import('../commands/guispoof-panel.js')
+        await handleGuiSpoofButton(interaction).catch(() => {})
+        return
+      }
+
       // Dynamic button handlers (pakai prefix)
       if (customId.startsWith('order_accept_prompt:')) {
         const [, userId, channelId] = customId.split(':')
@@ -335,6 +480,19 @@ export default {
         await handleOrderRejectPrompt(interaction, userId, channelId).catch(() => {})
         return
       }
+      // Tombol jasa dinamis (pakai prefix)
+      if (customId.startsWith('jasa_pkg:')) {
+        await handleJasaPaket(interaction, customId.split(':')[1]).catch(() => {})
+        return
+      }
+      if (customId.startsWith('jasa_ok:')) {
+        await handleJasaOk(interaction, customId.split(':')[1]).catch(() => {})
+        return
+      }
+      if (customId.startsWith('jasa_eli5:')) {
+        await handleJasaEli5(interaction, customId.split(':')[1]).catch(() => {})
+        return
+      }
 
       const handlers = {
         open_ticket: () => handleTicketButton(interaction),
@@ -344,6 +502,17 @@ export default {
         submit_suggestion: () => handleSuggestion(interaction),
         role_male: () => handleRoleSelect(interaction, 'male'),
         role_female: () => handleRoleSelect(interaction, 'female'),
+        faq_cara_beli: () => handleFaqCaraBeli(interaction),
+        faq_daftar_harga: () => handleFaqDaftarHarga(interaction),
+        faq_setup_summit: () => handleFaqSetupSummit(interaction),
+        faq_hubungi_admin: () => handleFaqHubungiAdmin(interaction),
+        jasa_start: () => handleJasaStart(interaction),
+        jasa_tanya: () => handleJasaTanya(interaction),
+        jasa_harga: () => handleJasaHarga(interaction),
+        jasa_calc: () => handleJasaCalc(interaction),
+        jasa_calc_reset: () => handleJasaCalc(interaction),
+        jasa_staff: () => handleJasaStaff(interaction),
+        jasa_carakerja: () => handleJasaCaraKerja(interaction),
       }
       const handler = handlers[customId]
       if (handler) {
@@ -354,6 +523,20 @@ export default {
           if (interaction.replied || interaction.deferred) await interaction.followUp(msg).catch(() => {})
           else await interaction.reply(msg).catch(() => {})
         }
+      }
+      return
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      const customId = interaction.customId
+      try {
+        if (customId === 'jasa_faq') await handleJasaFaq(interaction)
+        else if (customId === 'jasa_calc_pages' || customId === 'jasa_calc_feats') await handleJasaCalcUpdate(interaction)
+        else if (customId.startsWith('webinfo:')) await handleWebInfoSelect(interaction)
+      } catch (err) {
+        const msg = { content: 'Terjadi error: ' + err.message, ephemeral: true }
+        if (interaction.replied || interaction.deferred) await interaction.followUp(msg).catch(() => {})
+        else await interaction.reply(msg).catch(() => {})
       }
       return
     }

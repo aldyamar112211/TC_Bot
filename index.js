@@ -23,6 +23,22 @@ for (const file of commandFiles) {
   if (cmd.default?.data) client.commands.set(cmd.default.data.name, cmd.default)
 }
 
+// Auto-deploy slash commands ke Discord pas bot nyala.
+// Default nyala; matiin dengan set AUTO_DEPLOY_COMMANDS=false di env.
+if (process.env.AUTO_DEPLOY_COMMANDS !== 'false') {
+  try {
+    const body = [...client.commands.values()].map(c => c.data.toJSON())
+    const rest = new REST().setToken(process.env.BOT_TOKEN)
+    await rest.put(
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      { body },
+    )
+    console.log(`Auto-deployed ${body.length} slash command(s).`)
+  } catch (err) {
+    console.error('Gagal auto-deploy commands:', err.message)
+  }
+}
+
 // Load events
 const eventFiles = readdirSync(join(__dirname, 'events')).filter(f => f.endsWith('.js'))
 for (const file of eventFiles) {
